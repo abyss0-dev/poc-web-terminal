@@ -1,0 +1,18 @@
+#cloud-config
+hostname: vm2
+fqdn: vm2
+ssh_pwauth: true
+disable_root: false
+users:
+  - name: poc
+    plain_text_passwd: poc
+    lock_passwd: false
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: [sudo]
+chpasswd:
+  expire: false
+  users:
+    - name: poc
+      password: poc
+      type: text

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Web Terminal</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; height: 100vh; display: flex; flex-direction: column;
+      background: #1e1e1e; color: #ddd;
+      font: 14px/1.4 system-ui, sans-serif;
+    }
+    header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 8px 12px; background: #252526; border-bottom: 1px solid #333;
+    }
+    header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+    #targets { display: flex; gap: 8px; flex-wrap: wrap; }
+    .target {
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border: 1px solid #444; border-radius: 4px;
+      background: #2d2d2d; cursor: pointer; user-select: none;
+    }
+    .target[disabled] { opacity: 0.45; cursor: not-allowed; }
+    .target.active { border-color: #0a84ff; background: #0a3a66; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+    .dot.ready { background: #2ecc71; }
+    .dot.booting { background: #f1c40f; }
+    .dot.error { background: #e74c3c; }
+    #status { margin-left: auto; color: #999; }
+    #term { flex: 1; min-height: 0; padding: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Web Terminal</h1>
+    <div id="targets"></div>
+    <span id="status">loading targets…</span>
+  </header>
+  <div id="term"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+  <script>
+    const targetsEl = document.getElementById("targets");
+    const statusEl = document.getElementById("status");
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontSize: 14,
+      theme: { background: "#1e1e1e" },
+    });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(document.getElementById("term"));
+    fit.fit();
+
+    let ws = null;
+    let activeId = null;
+    const encoder = new TextEncoder();
+
+    function setStatus(text) { statusEl.textContent = text; }
+
+    function sendResize() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      fit.fit();
+      ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+    }
+
+    function connect(id) {
+      if (ws) { ws.close(); ws = null; }
+      term.reset();
+      activeId = id;
+      renderTargets(lastTargets);
+
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      ws = new WebSocket(`${proto}://${location.host}/ws?id=${encodeURIComponent(id)}`);
+      ws.binaryType = "arraybuffer";
+
+      ws.onopen = () => {
+        setStatus(`connected: ${id}`);
+        sendResize(); // first control frame syncs the remote PTY immediately
+        term.focus();
+      };
+      ws.onmessage = (ev) => {
+        if (typeof ev.data === "string") return; // control frames are browser→backend only
+        term.write(new Uint8Array(ev.data));
+      };
+      ws.onclose = () => {
+        setStatus(`disconnected: ${id}`);
+        term.write("\r\n\x1b[2m[session closed]\x1b[0m\r\n");
+        ws = null;
+      };
+      ws.onerror = () => setStatus(`error: ${id}`);
+    }
+
+    term.onData((data) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(encoder.encode(data));
+      }
+    });
+
+    window.addEventListener("resize", sendResize);
+
+    let lastTargets = [];
+    function renderTargets(targets) {
+      lastTargets = targets;
+      targetsEl.innerHTML = "";
+      for (const t of targets) {
+        const el = document.createElement("div");
+        el.className = "target" + (t.id === activeId ? " active" : "");
+        if (t.status !== "ready") el.setAttribute("disabled", "");
+        el.innerHTML = `<span class="dot ${t.status}"></span><span>${t.label}</span>`;
+        el.title = t.status;
+        if (t.status === "ready") el.onclick = () => connect(t.id);
+        targetsEl.appendChild(el);
+      }
+    }
+
+    async function refreshTargets() {
+      try {
+        const res = await fetch("/api/targets");
+        const targets = await res.json();
+        renderTargets(targets);
+        if (!activeId) {
+          const ready = targets.filter((t) => t.status === "ready").length;
+          setStatus(ready ? "select a target" : "targets booting…");
+        }
+      } catch (e) {
+        setStatus("cannot reach BFF");
+      }
+    }
+
+    refreshTargets();
+    // Poll until something is ready, then back off; status keeps reflecting the fleet.
+    setInterval(refreshTargets, 3000);
+  </script>
+</body>
+</html>
