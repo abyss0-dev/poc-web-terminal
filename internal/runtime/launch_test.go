@@ -23,31 +23,21 @@ func testTC() TargetConfig {
 	}
 }
 
-func TestQEMUArgsWithKVMUsesHostCPU(t *testing.T) {
-	args := qemuArgs(testTC(), true)
+func TestQEMUArgsRequireKVMHostCPU(t *testing.T) {
+	args := qemuArgs(testTC())
 	if !contains(args, "-enable-kvm") {
-		t.Fatalf("kvm args missing -enable-kvm: %v", args)
+		t.Fatalf("args missing -enable-kvm: %v", args)
 	}
 	if !hasFlagValue(args, "-cpu", "host") {
-		t.Fatalf("kvm args missing -cpu host: %v", args)
+		t.Fatalf("args missing -cpu host: %v", args)
 	}
-}
-
-func TestQEMUArgsWithoutKVMOmitsHostCPU(t *testing.T) {
-	args := qemuArgs(testTC(), false)
-	if contains(args, "-enable-kvm") {
-		t.Fatalf("tcg args must not enable kvm: %v", args)
-	}
-	if hasFlagValue(args, "-cpu", "host") {
-		t.Fatalf("tcg args must not request -cpu host (requires KVM): %v", args)
-	}
-	if !strings.Contains(argsString(args), "accel=tcg") {
-		t.Fatalf("tcg args should select tcg accel: %v", args)
+	if !strings.Contains(argsString(args), "accel=kvm") {
+		t.Fatalf("args should select kvm accel: %v", args)
 	}
 }
 
 func TestQEMUArgsCommonShape(t *testing.T) {
-	args := qemuArgs(testTC(), true)
+	args := qemuArgs(testTC())
 	s := argsString(args)
 	for _, want := range []string{
 		"-m 1024",
@@ -64,7 +54,7 @@ func TestQEMUArgsCommonShape(t *testing.T) {
 func TestQEMUArgsDefaultMemory(t *testing.T) {
 	tc := testTC()
 	tc.Memory = ""
-	if !hasFlagValue(qemuArgs(tc, false), "-m", "1024") {
+	if !hasFlagValue(qemuArgs(tc), "-m", "1024") {
 		t.Fatal("empty memory should default to 1024")
 	}
 }

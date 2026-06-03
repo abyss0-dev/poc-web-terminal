@@ -34,40 +34,32 @@ func kvmAvailable() bool {
 	return true
 }
 
-// qemuArgs builds the QEMU command line for one target. With KVM it requests
-// host CPU passthrough; without KVM it selects the TCG accelerator and omits
-// "-cpu host", which requires hardware virtualization.
-func qemuArgs(tc TargetConfig, kvm bool) []string {
+// qemuArgs builds the QEMU command line for one target. KVM acceleration with
+// host CPU passthrough is mandatory; callers must verify KVMAvailable first.
+func qemuArgs(tc TargetConfig) []string {
 	mem := tc.Memory
 	if mem == "" {
 		mem = "1024"
 	}
 	hostfwd := fmt.Sprintf("user,id=net0,hostfwd=tcp:127.0.0.1:%d-:22", tc.SSHPort)
 
-	var args []string
-	if kvm {
-		args = append(args, "-enable-kvm", "-machine", "accel=kvm", "-cpu", "host")
-	} else {
-		args = append(args, "-machine", "accel=tcg")
-	}
-	args = append(args,
+	return []string{
+		"-enable-kvm", "-machine", "accel=kvm", "-cpu", "host",
 		"-m", mem,
-		"-drive", "file="+tc.Image+",if=virtio",
-		"-drive", "file="+tc.Seed+",if=virtio,format=raw",
+		"-drive", "file=" + tc.Image + ",if=virtio",
+		"-drive", "file=" + tc.Seed + ",if=virtio,format=raw",
 		"-netdev", hostfwd,
 		"-device", "virtio-net-pci,netdev=net0",
 		"-display", "none",
 		"-serial", "none",
 		"-monitor", "none",
-	)
-	return args
+	}
 }
 
 // launchQEMU starts one Ubuntu guest under QEMU user-mode networking with a
-// host-loopback port forward to the guest's sshd. KVM acceleration is used when
-// available and falls back to TCG otherwise.
+// host-loopback port forward to the guest's sshd. KVM acceleration is required.
 func launchQEMU(tc TargetConfig) (Process, error) {
-	cmd := exec.Command("qemu-system-x86_64", qemuArgs(tc, kvmAvailable())...)
+	cmd := exec.Command("qemu-system-x86_64", qemuArgs(tc)...)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	// Own the process in its own group so Stop terminates the whole guest.

@@ -32,17 +32,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	opts := runtime.Options{}
 	if !runtime.KVMAvailable() {
-		// TCG emulation boots far slower than KVM, so the default 60s readiness
-		// budget is too tight; extend it and make the cause visible.
-		opts.ReadyTimeout = 5 * time.Minute
-		logger.Warn("KVM unavailable: using slow TCG emulation; extending readiness timeout to 5m",
-			slog.String("hint", "add user to the kvm group or grant /dev/kvm access for fast boots"))
+		logger.Error("KVM acceleration is required but /dev/kvm is not accessible",
+			slog.String("hint", "add your user to the kvm group (then start from a fresh shell) or grant access to /dev/kvm"))
+		os.Exit(1)
 	}
 
-	rt := runtime.NewQEMU(cfg, opts)
-	logger.Info("launching fleet", slog.Int("targets", len(cfg.Targets)), slog.Bool("kvm", runtime.KVMAvailable()))
+	rt := runtime.NewQEMU(cfg, runtime.Options{})
+	logger.Info("launching fleet", slog.Int("targets", len(cfg.Targets)))
 	if err := rt.EnsureStarted(); err != nil {
 		logger.Error("ensure started", slog.String("error", err.Error()))
 		os.Exit(1)

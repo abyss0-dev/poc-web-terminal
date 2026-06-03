@@ -27,9 +27,9 @@ behind a Runtime boundary. Concretely:
 
 Prerequisites: Go 1.25+, `qemu-system-x86_64` / `qemu-img`, and one of
 `cloud-localds` / `genisoimage` / `mkisofs` / `xorriso` for the cloud-init seed.
-KVM is used automatically when `/dev/kvm` is accessible (otherwise QEMU falls
-back to slow TCG). On WSL, ensure your user can open `/dev/kvm` — adding it to
-the `kvm` group is durable; start the GW from a fresh shell so the group applies.
+KVM acceleration is required: the GW exits immediately if `/dev/kvm` is not
+accessible. On WSL, add your user to the `kvm` group (durable across `/dev/kvm`
+re-creation) and start the GW from a fresh shell so the group applies.
 
 1. Run the test suite:
 
