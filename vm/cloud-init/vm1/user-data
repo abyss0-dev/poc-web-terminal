@@ -16,3 +16,42 @@ chpasswd:
     - name: poc
       password: poc
       type: text
+write_files:
+  # bloodhound static binary, injected at seed-build time by fetch-image.sh.
+  # The placeholder line below is replaced with the gzip+base64 of the binary.
+  - path: /usr/local/bin/bloodhound
+    owner: root:root
+    permissions: '0755'
+    encoding: gz+b64
+    content: |
+      @@BLOODHOUND_GZ_B64@@
+  - path: /etc/systemd/system/bloodhound.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=bloodhound eBPF behavioral tracer
+      Documentation=https://github.com/abyss0-dev/bloodhound
+      After=network.target
+
+      [Service]
+      Type=simple
+      # bloodhound logs via env_logger, which defaults to ERROR when RUST_LOG is
+      # unset — that mutes the runtime BTF-offset resolution line and, worse, the
+      # warn! fallback guardrail (#37). Surface info+ so the resolved offsets are
+      # visible in journalctl and a bad-offset fallback fails loud, not silent.
+      Environment=RUST_LOG=info
+      # uid is resolved at start so the filter tracks the poc login user even if
+      # its uid ever drifts from 1000. NDJSON events go to the log file; daemon
+      # diagnostics go to the journal (journalctl -u bloodhound).
+      ExecStart=/bin/sh -c 'exec /usr/local/bin/bloodhound --uid "$(id -u poc)" --exclude-ports 22'
+      Restart=on-failure
+      RestartSec=2
+      StandardOutput=append:/var/log/bloodhound.ndjson
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - [ systemctl, daemon-reload ]
+  - [ systemctl, enable, --now, bloodhound.service ]
