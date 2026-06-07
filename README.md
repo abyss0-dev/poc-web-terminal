@@ -90,6 +90,19 @@ Stop the GW with Ctrl-C; it terminates every QEMU guest it launched.
   with no cross-talk.
 - **Session lifecycle** — typing `exit` or closing the tab ends the session and
   prints `[session closed]`; reconnecting to the same target succeeds.
+- **Selection & clipboard** — drag to select; `Ctrl+C` copies *when text is
+  selected* (and clears the selection), otherwise it reaches the shell as SIGINT
+  — the same convention as VS Code's terminal, chosen because Chrome reserves
+  `Ctrl+Shift+C` for DevTools. `Ctrl+V` (`Cmd+V`) pastes via xterm's native
+  handler; right-click opens a Copy / Paste / Select All / Find / Clear menu.
+  The browser Clipboard API only works in a secure context, so this requires
+  `localhost` / `127.0.0.1` or HTTPS; over plain HTTP to a LAN IP the status
+  line reports the clipboard as unavailable.
+- **Search** — `Ctrl+Shift+F` (`Cmd+F`) opens an in-buffer search box with
+  match highlighting and next/previous (`Enter` / `Shift+Enter`, `Esc` closes).
+- **Links** — URLs in output are clickable (open in a new tab).
+- **Rendering** — a WebGL renderer (with automatic fall-back to the DOM renderer
+  on context loss), Unicode 11 width handling, and a 10k-line scrollback.
 
 ## 4. Confirming bloodhound is resident (from the browser terminal)
 
